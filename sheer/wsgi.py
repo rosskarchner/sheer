@@ -121,7 +121,8 @@ def app_with_config(config):
         search_path = build_search_path(app.root_dir,
                                         flask.request.path,
                                         append='_queries')
-        context = {'queries': QueryFinder()}
+        queries_dir = os.path.join(root_dir, '_queries')
+        context = {'queries': QueryFinder(app.es, app.es_index, queries_dir)}
         return context
 
     @app.context_processor

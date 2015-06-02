@@ -3,6 +3,8 @@ import codecs
 import logging
 import json
 
+from collections import namedtuple
+
 import flask
 
 import dateutil.parser
@@ -28,11 +30,9 @@ ALLOWED_SEARCH_PARAMS = ('doc_type',
                          'version')
 
 
-def mapping_for_type(typename, es=None, es_index=None):
-    if not es:
-        es = flask.current_app.es
-    if not es_index:
-        es_index = flask.current_app.es_index
+FakeQuery = namedtuple('FakeQuery',['es','es_index'])
+
+def mapping_for_type(typename, es, es_index):
 
     return es.indices.get_mapping(index=es_index, doc_type=typename)
 
@@ -45,9 +45,7 @@ def field_or_source_value(fieldname, hit_dict):
         return hit_dict['_source'][fieldname]
 
 
-def datatype_for_fieldname_in_mapping(fieldname, hit_type, mapping_dict):
-    es = flask.current_app.es
-    es_index = flask.current_app.es_index
+def datatype_for_fieldname_in_mapping(fieldname, hit_type, mapping_dict, es, es_index):
 
     try:
         return mapping_dict[es_index]["mappings"][hit_type]["properties"][fieldname]["type"]
@@ -79,9 +77,11 @@ def coerced_value(value, datatype):
 
 class QueryHit(object):
 
-    def __init__(self, hit_dict, es=None, es_index=None):
+    def __init__(self, hit_dict, es, es_index):
         self.hit_dict = hit_dict
         self.type = hit_dict['_type']
+        self.es = es
+        self.es_index = es_index
         self.mapping = mapping_for_type(self.type, es=es, es_index=es_index)
 
     def __str__(self):
@@ -101,7 +101,7 @@ class QueryHit(object):
     def __getattr__(self, attrname):
         value = field_or_source_value(attrname, self.hit_dict)
         datatype = datatype_for_fieldname_in_mapping(
-            attrname, self.type, self.mapping)
+            attrname, self.type, self.mapping, self.es, self.es_index)
         return coerced_value(value, datatype)
 
     def json_compatible(self):
@@ -112,9 +112,15 @@ class QueryHit(object):
 
 class QueryResults(object):
 
-    def __init__(self, result_dict, pagenum=1):
+    def __init__(self, query, result_dict, pagenum=1):
         self.result_dict = result_dict
         self.total = int(result_dict['hits']['total'])
+        self.query = query
+
+        # confusing: using the word 'query' to mean different things
+        # above, it's the Query object
+        # below, it's Elasticsearch query DSL
+
         if 'query' in result_dict:
             self.size = int(result_dict['query'].get('size', '10'))
             self.from_ = int(result_dict['query'].get('from', 1))
@@ -128,7 +134,8 @@ class QueryResults(object):
     def __iter__(self):
         if 'hits' in self.result_dict and 'hits' in self.result_dict['hits']:
             for hit in self.result_dict['hits']['hits']:
-                yield QueryHit(hit)
+                query_hit =  QueryHit(hit, self.query.es, self.query.es_index)
+                yield query_hit
 
     def aggregations(self, fieldname):
         if "aggregations" in self.result_dict and \
@@ -168,12 +175,11 @@ class QueryResults(object):
 
 class Query(object):
 
-    def __init__(self, filename=None, json_safe=False):
+    def __init__(self, filename,es, es_index, json_safe=False):
         # TODO: make the no filename case work
 
-        app = flask.current_app
-        self.es_index = app.es_index
-        self.es = app.es
+        self.es_index = es_index
+        self.es = es
         self.filename = filename
         self.__results = None
         self.json_safe = json_safe
@@ -241,35 +247,35 @@ class Query(object):
         final_query_dict['body'] = query_body
         response = self.es.search(**final_query_dict)
         response['query'] = query_dict
-        return QueryResults(response, pagenum)
+        return QueryResults(self,response, pagenum)
 
     def possible_values_for(self, field, **kwargs):
         results = self.search_with_url_arguments(aggregations=[field], **kwargs)
         return results.aggregations(field)
 
-    @property
-    def results(self):
-        if self.__results:
-            return self.__results
-        else:
-            self.search()
-            return self.__results
+    def search(self):
+        query_file = json.loads(file(self.filename).read())
+        query_dict = query_file['query']
+
+        response = self.es.search(index=es_index, body=query_dict)
+
+        return QueryResults(self,response)
+
 
 
 class QueryFinder(object):
 
-    def __init__(self):
-        app = flask.current_app
-        self.es = app.es
-        self.es_index = app.es_index
-        self.queries_dir = os.path.join(app.root_dir, '_queries')
+    def __init__(self, es, es_index, queries_dir):
+        self.es = es
+        self.es_index = es_index
+        self.queries_dir = queries_dir
 
     def __getattr__(self, name):
         query_filename = name + ".json"
         query_file_path = os.path.join(self.queries_dir, query_filename)
 
         if os.path.exists(query_file_path):
-            query = Query(query_file_path, self.es_index)
+            query = Query(query_file_path, self.es, self.es_index)
             return query
 
 
@@ -292,13 +298,17 @@ def add_query_utilities(app):
         doctype, docid = hit.type, hit._id
         raw_results = es.mlt(
             index=es_index, doc_type=doctype, id=docid, **kwargs)
-        return QueryResults(raw_results)
+
+        # this is bad and I should feel bad
+        # (I do)
+        fake_query = FakeQuery(es,es_index)
+        return QueryResults(fake_query,raw_results)
 
     def get_document(doctype, docid):
         es = flask.current_app.es
         es_index = app.es_index
         raw_results = es.get(index=es_index, doc_type=doctype, id=docid)
-        return QueryHit(raw_results)
+        return QueryHit(raw_results, es, es_index)
 
     @app.context_processor
     def query_utility_context_processor():

@@ -24,7 +24,7 @@ def do_lookup(name, doc_type, **search_params):
 
     try:
         document = es.get(index=es_index, doc_type=doc_type, id=id)
-        hit = QueryHit(document)
+        hit = QueryHit(document, es, es_index)
         return {lookup_name: hit}
     except NotFoundError:
         return None
