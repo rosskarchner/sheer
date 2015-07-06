@@ -1,3 +1,5 @@
+import os
+
 from django.conf import settings
 from django.core.wsgi import get_wsgi_application
 
@@ -16,6 +18,7 @@ def app_with_config(config):
             'sheerlike.middleware.GlobalRequestMiddleware',
         ),
         INSTALLED_APPS = ['sheerlike', 'django.contrib.staticfiles'],
+        ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(','),
         SHEER_ELASTICSEARCH_SERVER = config['elasticsearch'],
         SHEER_ELASTICSEARCH_INDEX = config['index'],
         SHEER_SITES = [site_path],

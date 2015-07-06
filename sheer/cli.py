@@ -15,6 +15,8 @@ ELASTICSEARCH_HOSTS = os.environ.get('SHEER_ELASTICSEARCH_HOSTS',
 ELASTICSEARCH_INDEX = os.environ.get('SHEER_ELASTICSEARCH_INDEX', 'content')
 DEBUG = bool(os.environ.get('SHEER_DEBUG', False))
 
+DJANGO_PROJECT = os.environ.get('DJANGO_PROJECT', '')
+
 def run_cli():
 
     parser = argparse.ArgumentParser(prog='sheer',
@@ -36,6 +38,8 @@ def run_cli():
             default= '7000', help="Port to run the web server on.")
     server_parser.add_argument('--addr', '-a',
             default= '0.0.0.0', help="Address to run the web server on.")
+    server_parser.add_argument('--project', default=DJANGO_PROJECT, help="run"
+            "server in context of an existing django app")
 
     for p in [parser, index_parser, server_parser]:
         p.add_argument('--debug', help="Print debugging output to the console.", action='store_true', default=DEBUG)
