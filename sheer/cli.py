@@ -60,7 +60,8 @@ def run_cli():
     config = dict(debug=args.debug,
                   location=os.path.join(os.getcwd(), args.location),
                   elasticsearch=parse_es_hosts(args.elasticsearch),
-                  index=args.index)
+                  index=args.index,
+                  django_project=args.project)
     args.func(args, config)
 
 if __name__ == '__main__':
