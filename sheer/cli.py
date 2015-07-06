@@ -6,7 +6,6 @@ import logging
 
 import sheer.indexer
 import sheer.server
-import sheer.builder
 
 from sheer.utility import parse_es_hosts
 
@@ -37,9 +36,6 @@ def run_cli():
             default= '7000', help="Port to run the web server on.")
     server_parser.add_argument('--addr', '-a',
             default= '0.0.0.0', help="Address to run the web server on.")
-
-    build_parser=subparsers.add_parser('build', help='Generate a static version of this site.')
-    build_parser.set_defaults(func=sheer.builder.build_with_cli_args)
 
     for p in [parser, index_parser, server_parser]:
         p.add_argument('--debug', help="Print debugging output to the console.", action='store_true', default=DEBUG)

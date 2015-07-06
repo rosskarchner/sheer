@@ -3,8 +3,6 @@ import codecs
 import logging
 import json
 
-import flask
-
 import dateutil.parser
 
 from time import mktime, strptime
@@ -29,11 +27,6 @@ ALLOWED_SEARCH_PARAMS = ('doc_type',
 
 
 def mapping_for_type(typename, es=None, es_index=None):
-    if not es:
-        es = flask.current_app.es
-    if not es_index:
-        es_index = flask.current_app.es_index
-
     return es.indices.get_mapping(index=es_index, doc_type=typename)
 
 
@@ -44,37 +37,6 @@ def field_or_source_value(fieldname, hit_dict):
     if '_source' in hit_dict and fieldname in hit_dict['_source']:
         return hit_dict['_source'][fieldname]
 
-
-def datatype_for_fieldname_in_mapping(fieldname, hit_type, mapping_dict):
-    es = flask.current_app.es
-    es_index = flask.current_app.es_index
-
-    try:
-        return mapping_dict[es_index]["mappings"][hit_type]["properties"][fieldname]["type"]
-    except KeyError:
-        return None
-
-
-def coerced_value(value, datatype):
-    if datatype == None or value == None:
-        return value
-
-    TYPE_MAP = {'string': unicode,
-                'date': dateutil.parser.parse,
-                'dict': dict,
-                'float': float,
-                'long': float,
-                'boolean': bool}
-
-    coercer = TYPE_MAP[datatype]
-
-    if type(value) == list:
-        if value and type(value[0]) == list:
-            return [[coercer(y) for y in v] for v in value]
-        else:
-            return [coercer(v) for v in value] or ""
-    else:
-        return coercer(value)
 
 
 class QueryHit(object):
@@ -89,14 +51,6 @@ class QueryHit(object):
 
     def __repr__(self):
         return self.__str__()
-
-    @property
-    def permalink(self):
-        app = flask.current_app
-        rule = app.permalinks_by_type.get(self.type)
-        if rule:
-            build_with = dict(id=self.hit_dict['_id'])
-            return flask.url_for(rule, **build_with)
 
     def __getattr__(self, attrname):
         value = field_or_source_value(attrname, self.hit_dict)
@@ -150,28 +104,12 @@ class QueryResults(object):
             hit.json_compatible() for hit in self.__iter__()]
         return response_data
 
-    def url_for_page(self, pagenum):
-        current_args = flask.request.args
-        args_dict = MultiDict(current_args)
-        if pagenum != 1:
-            args_dict['page'] = pagenum
-        elif 'page' in args_dict:
-            del args_dict['page']
-
-        encoded = url_encode(args_dict)
-        if encoded:
-            url = "".join([flask.request.path, "?", url_encode(args_dict)])
-            return url
-        else:
-            return flask.request.path
-
 
 class Query(object):
 
     def __init__(self, filename=None, json_safe=False):
         # TODO: make the no filename case work
 
-        app = flask.current_app
         self.es_index = app.es_index
         self.es = app.es
         self.filename = filename
@@ -197,7 +135,6 @@ class Query(object):
         query_dict.update(non_filter_args)
         pagenum = 1
 
-        request = flask.request
 
         # Add in filters from the template.
         new_multidict = MultiDict()
@@ -288,24 +225,3 @@ class QueryJsonEncoder(json.JSONEncoder):
 
         return json.JSONEncoder.default(self, obj)
 
-
-def add_query_utilities(app):
-    def more_like_this(hit, **kwargs):
-        es = flask.current_app.es
-        es_index = app.es_index
-        doctype, docid = hit.type, hit._id
-        raw_results = es.mlt(
-            index=es_index, doc_type=doctype, id=docid, **kwargs)
-        return QueryResults(raw_results)
-
-    def get_document(doctype, docid):
-        es = flask.current_app.es
-        es_index = app.es_index
-        raw_results = es.get(index=es_index, doc_type=doctype, id=docid)
-        return QueryHit(raw_results)
-
-    @app.context_processor
-    def query_utility_context_processor():
-        context = {'more_like_this': more_like_this,
-                   'get_document': get_document}
-        return context
