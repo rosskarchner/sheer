@@ -1,5 +1,3 @@
-#!python
-
 import argparse
 import os
 import logging
@@ -61,7 +59,10 @@ def run_cli():
                   location=os.path.join(os.getcwd(), args.location),
                   elasticsearch=parse_es_hosts(args.elasticsearch),
                   index=args.index,
-                  django_project=args.project)
+                  )
+    if hasattr(args, 'project'):
+        config['django_project'] = args.project
+
     args.func(args, config)
 
 if __name__ == '__main__':
