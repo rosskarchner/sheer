@@ -12,7 +12,7 @@ def app_with_config(config):
 
     if config.get('django_project'):
         sys.path.append(config['django_project'])
-        settings.DEBUG = config['debug']
+        settings.DEBUG = config.get('debug', False)
         settings.ALLOWED_HOSTS = allowed_hosts
         settings.TEMPLATES = [{
             'BACKEND': 'django.template.backends.jinja2.Jinja2',
@@ -25,7 +25,7 @@ def app_with_config(config):
         return get_wsgi_application()
 
     settings.configure(
-        DEBUG=config['debug'],
+        DEBUG=config.get('debug', False),
         SECRET_KEY='thisisthesecretkey',
         ROOT_URLCONF='sheer.django_urls',
         MIDDLEWARE_CLASSES=(
