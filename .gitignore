@@ -18,3 +18,8 @@ coverage.xml
 venv/
 env/
 ENV/
+# Build artifacts
+.eggs/
+*.egg
+build/
+dist/

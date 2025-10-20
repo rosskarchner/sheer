@@ -10,7 +10,7 @@ import dateutil.parser
 from time import mktime, strptime
 import datetime
 
-from werkzeug.urls import url_encode
+from urllib.parse import urlencode as url_encode
 from werkzeug.datastructures import MultiDict
 
 from sheer.decorators import memoized

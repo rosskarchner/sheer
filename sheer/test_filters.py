@@ -5,7 +5,7 @@ from sheer import filters
 
 class TestArgParsing(object):
 
-    def setup(self):
+    def setup_method(self):
         self.args = MultiDict([('filter_category', 'cats'),
                                ('filter_category', 'dogs'),
                                ('filter_planet', 'earth'),

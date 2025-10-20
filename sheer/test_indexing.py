@@ -2,7 +2,7 @@
 
 import sys
 import mock
-from StringIO import StringIO
+from io import StringIO
 from .indexer import ContentProcessor, index_location
 from elasticsearch.exceptions import TransportError
 
@@ -18,7 +18,7 @@ class TestIndexing(object):
     Test Sheer content indexing.
     """
 
-    def setup(self):
+    def setup_method(self):
         # Sheer indexing tries to load three JSON files. For testing purposes,
         # `settings.json` and `mappings.json` are not necessary, but we do need
         # a content processor to test with. The contents of `processors.json` is
@@ -264,7 +264,7 @@ class TestIndexing(object):
         test_args = AttrDict(processors=[], reindex=False)
         try:
             index_location(test_args, self.config)
-        except SystemExit, s:
+        except SystemExit as s:
             assert s.code == \
                 'Indexing the following processor(s) failed: ioerrs'
 
@@ -332,7 +332,7 @@ class TestIndexing(object):
         test_args = AttrDict(processors=[], reindex=False)
         try:
             index_location(test_args, self.config)
-        except SystemExit, s:
+        except SystemExit as s:
             assert s.code == \
                 'Indexing the following processor(s) failed: valueerrs'
 
