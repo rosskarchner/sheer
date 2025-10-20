@@ -14,7 +14,7 @@ class TestArgParsing(object):
 
     def test_args_to_filter_dsl(self):
         filter_dsl = filters.filter_dsl_from_multidict(self.args)
-        print filter_dsl
+        print(filter_dsl)
         assert('and' in filter_dsl[0])
         assert('or' in filter_dsl[0]['and'][0])
         value1 = filter_dsl[0]['and'][0]['or'][0]['term']['category']

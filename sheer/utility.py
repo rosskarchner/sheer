@@ -13,7 +13,8 @@ def get_case_path(filename):
 
 def get_case_contents(filename):
     path = get_case_path(filename)
-    return file(path).read()
+    with open(path, 'r') as f:
+        return f.read()
 
 
 def path_ancestors(path):
@@ -39,7 +40,7 @@ def build_search_path(root_dir, seeking_path, append=None, include_start_directo
 
     rel_search_path += path_ancestors(seeking_path)
 
-    if append and type(append) in (str, unicode):
+    if append and type(append) is str:
         append_paths = [append]
     elif append:
         append_paths = append

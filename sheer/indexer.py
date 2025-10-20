@@ -1,16 +1,8 @@
 import os
 import sys
 import codecs
-
-if sys.version_info[0:2] == (2, 6):
-    # Python 2.6
-    # the json included in 2.6 doesn't support object_pairs_hook
-    from ordereddict import OrderedDict
-    import simplejson as json
-else:
-    # Python 2.7 or higher
-    from collections import OrderedDict
-    import json
+from collections import OrderedDict
+import json
 
 import glob
 import importlib
@@ -65,24 +57,29 @@ def index_processor(es, index_name, processor, reindex=False):
     Elasticsearch will be destroyed and recreated and all documents will
     be created anew.
     """
-    # If the mapping already exists, and we were called with the reindex
-    # flag, remove the mapping.
-    mapping = es.indices.get_mapping(index=index_name, doc_type=processor.name)
-    if mapping and reindex:
-        print "removing existing mapping for %s (%s)" % (processor.name, processor.processor_name)
-        es.indices.delete_mapping(index=index_name, doc_type=processor.name)
+    # Get existing mapping
+    try:
+        mapping = es.indices.get_mapping(index=index_name)
+        has_mapping = processor.name in mapping.get(index_name, {}).get('mappings', {})
+    except:
+        has_mapping = False
         mapping = {}
 
-    # Then create the mapping if it does not exist
-    if not mapping:
-        print "creating mapping for %s (%s)" % (processor.name, processor.processor_name)
+    # If reindexing, we need to delete and recreate the index
+    # Modern Elasticsearch/OpenSearch doesn't support deleting individual mappings
+    if has_mapping and reindex:
+        print("Warning: reindexing individual mappings requires manual intervention in ES 7+")
+        print("Consider using --reindex without specific processors to recreate the entire index")
+
+    # Create the mapping if it does not exist
+    if not has_mapping:
+        print("creating mapping for %s (%s)" % (processor.name, processor.processor_name))
         # Only manually create the mapping if one is specified.
         # Otherwise, let Elasticsearch create a mapping
         mapping_supplied = processor.mapping()
         if mapping_supplied:
             es.indices.put_mapping(index=index_name,
-                                   doc_type=processor.name,
-                                   body={processor.name: mapping_supplied})
+                                   body=mapping_supplied)
     # Keep track of whether the indexing process is successful
     # This is so the end user and/or Jenkins knows the job failed if everything
     # didn't index 100%
@@ -131,13 +128,14 @@ def index_location(args, config):
     # If we're given args.reindex and NOT given a list of processors to reindex,
     # we're expected to reindex everything. Delete the existing index.
     if not args.processors and args.reindex and es.indices.exists(index_name):
-        print "reindexing %s" % index_name
+        print("reindexing %s" % index_name)
         es.indices.delete(index_name)
 
     # If the index doesn't exist, create it.
     if not es.indices.exists(index_name):
         if os.path.exists(settings_path):
-            es.indices.create(index=index_name, body=file(settings_path).read())
+            with open(settings_path, 'r') as f:
+                es.indices.create(index=index_name, body=f.read())
         else:
             es.indices.create(index=index_name)
 
@@ -147,7 +145,7 @@ def index_location(args, config):
     if processor_settings:
         configured_processors = [ContentProcessor(name, **details)
                                  for name, details
-                                 in processor_settings.iteritems()]
+                                 in processor_settings.items()]
 
         processors += configured_processors
 

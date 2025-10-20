@@ -17,6 +17,6 @@ class IndexHelper(object):
         self.index_name = config['index']
 
     def get_document(self, doctype, docid):
-        raw_results = self.es.get(index=self.index_name,
-                                  doc_type=doctype, id=docid)
+        # Modern Elasticsearch doesn't use doc_type in get
+        raw_results = self.es.get(index=self.index_name, id=docid)
         return QueryHit(raw_results, es=self.es, es_index=self.index_name)
