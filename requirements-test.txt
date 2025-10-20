@@ -1,0 +1,10 @@
+# Testing dependencies
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-docker>=2.0.0
+testcontainers>=3.7.0
+docker>=6.1.0
+requests>=2.31.0
+
+# Include base requirements
+-r requirements.txt
