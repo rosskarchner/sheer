@@ -1,0 +1,27 @@
+{
+    "properties": {
+        "title": {
+            "type": "text",
+            "fields": {
+                "keyword": {
+                    "type": "keyword"
+                }
+            }
+        },
+        "author": {
+            "type": "keyword"
+        },
+        "date": {
+            "type": "date"
+        },
+        "tags": {
+            "type": "keyword"
+        },
+        "content": {
+            "type": "text"
+        },
+        "category": {
+            "type": "keyword"
+        }
+    }
+}

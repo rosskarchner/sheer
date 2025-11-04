@@ -15,6 +15,6 @@ def mappings(name, **kwargs):
     site_root = kwargs.get('site_root', '.')
     mappings_path = os.path.join(site_root, '_defaults/%s_mappings.json' % name)
     if os.path.exists(mappings_path):
-        with file(mappings_path) as mappings_file:
+        with open(mappings_path, 'r') as mappings_file:
             return json.loads(mappings_file.read())
         

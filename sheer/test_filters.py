@@ -5,7 +5,7 @@ from sheer import filters
 
 class TestArgParsing(object):
 
-    def setup(self):
+    def setup_method(self):
         self.args = MultiDict([('filter_category', 'cats'),
                                ('filter_category', 'dogs'),
                                ('filter_planet', 'earth'),
@@ -14,7 +14,7 @@ class TestArgParsing(object):
 
     def test_args_to_filter_dsl(self):
         filter_dsl = filters.filter_dsl_from_multidict(self.args)
-        print filter_dsl
+        print(filter_dsl)
         assert('and' in filter_dsl[0])
         assert('or' in filter_dsl[0]['and'][0])
         value1 = filter_dsl[0]['and'][0]['or'][0]['term']['category']

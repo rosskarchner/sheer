@@ -1,0 +1,8 @@
+{
+    "posts": {
+        "processor": "sheer.processors.filesystem",
+        "directory": "tests/integration/test_data/_posts/",
+        "site_root": "tests/integration/test_data",
+        "mappings": "tests/integration/test_data/_settings/posts_mappings.json"
+    }
+}

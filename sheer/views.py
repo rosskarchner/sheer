@@ -19,11 +19,11 @@ def do_lookup(name, doc_type, **search_params):
     es_index = flask.current_app.es_index
 
     lookup_name = name
-    doc_type = doc_type
     id = search_params['id']
 
     try:
-        document = es.get(index=es_index, doc_type=doc_type, id=id)
+        # Modern Elasticsearch doesn't use doc_type in get
+        document = es.get(index=es_index, id=id)
         hit = QueryHit(document)
         return {lookup_name: hit}
     except NotFoundError:

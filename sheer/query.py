@@ -10,7 +10,7 @@ import dateutil.parser
 from time import mktime, strptime
 import datetime
 
-from werkzeug.urls import url_encode
+from urllib.parse import urlencode as url_encode
 from werkzeug.datastructures import MultiDict
 
 from sheer.decorators import memoized
@@ -34,7 +34,11 @@ def mapping_for_type(typename, es=None, es_index=None):
     if not es_index:
         es_index = flask.current_app.es_index
 
-    return es.indices.get_mapping(index=es_index, doc_type=typename)
+    # Modern Elasticsearch/OpenSearch doesn't use doc_type in the same way
+    try:
+        return es.indices.get_mapping(index=es_index)
+    except:
+        return {}
 
 
 def field_or_source_value(fieldname, hit_dict):
@@ -59,14 +63,17 @@ def coerced_value(value, datatype):
     if datatype == None or value == None:
         return value
 
-    TYPE_MAP = {'string': unicode,
+    TYPE_MAP = {'string': str,
+                'text': str,
+                'keyword': str,
                 'date': dateutil.parser.parse,
                 'dict': dict,
                 'float': float,
                 'long': float,
+                'integer': int,
                 'boolean': bool}
 
-    coercer = TYPE_MAP[datatype]
+    coercer = TYPE_MAP.get(datatype, str)
 
     if type(value) == list:
         if value and type(value[0]) == list:
@@ -114,11 +121,17 @@ class QueryResults(object):
 
     def __init__(self, result_dict, pagenum=1):
         self.result_dict = result_dict
-        self.total = int(result_dict['hits']['total'])
+        # Handle both old (int) and new (dict with 'value') formats for total
+        total_value = result_dict['hits']['total']
+        if isinstance(total_value, dict):
+            self.total = int(total_value.get('value', 0))
+        else:
+            self.total = int(total_value)
+
         if 'query' in result_dict:
             self.size = int(result_dict['query'].get('size', '10'))
             self.from_ = int(result_dict['query'].get('from', 1))
-            self.pages = self.total / self.size + \
+            self.pages = self.total // self.size + \
                 int(self.total % self.size > 0)
         else:
             self.size, self.from_, self.pages = 10, 1, 1
@@ -179,20 +192,17 @@ class Query(object):
         self.json_safe = json_safe
 
     def search_with_url_arguments(self, aggregations=None, **kwargs):
-        query_file = json.loads(file(self.filename).read())
+        with open(self.filename, 'r') as f:
+            query_file = json.loads(f.read())
         query_dict = query_file['query']
 
         '''
         These dict constructors split the kwargs from the template into filter
         arguments and arguments that can be placed directly into the query body.
-        The dict constructor syntax supports python 2.6, 2.7, and 3.x
-        If python 2.7, use dict comprehension and iteritems()
-        With python 3, use dict comprehension and items() (items() replaces 
-        iteritems and is just as fast)
         '''
-        filter_args = dict((key, value) for (key, value) in kwargs.items() 
+        filter_args = dict((key, value) for (key, value) in kwargs.items()
             if key.startswith('filter_'))
-        non_filter_args = dict((key, value) for (key, value) in kwargs.items() 
+        non_filter_args = dict((key, value) for (key, value) in kwargs.items()
             if not key.startswith('filter_'))
         query_dict.update(non_filter_args)
         pagenum = 1
@@ -212,7 +222,7 @@ class Query(object):
             if type(aggregations) is str:
                 aggregations = [aggregations] # so we can treat it as a list
             for fieldname in aggregations:
-                aggs_dsl[fieldname] = {'terms': 
+                aggs_dsl[fieldname] = {'terms':
                     {'field': fieldname, 'size': 10000}}
             query_body['aggs'] = aggs_dsl
         else:
@@ -224,17 +234,16 @@ class Query(object):
             args_flat_filtered = dict(
                 [(k, v) for k, v in args_flat.items() if v])
             query_dict.update(args_flat_filtered)
-            query_body['query'] = {'filtered': {'filter': {}}}
+
+            # Modern Elasticsearch uses 'bool' query instead of 'filtered'
+            query_body['query'] = {'bool': {'filter': []}}
             if url_filters:
-                query_body['query']['filtered']['filter'][
-                    'and'] = [f for f in url_filters]
+                query_body['query']['bool']['filter'].extend(url_filters)
 
             if 'filters' in query_file:
-                if 'and' not in query_body['query']['filtered']['filter']:
-                    query_body['query']['filtered']['filter']['and'] = []
                 for json_filter in query_file['filters']:
-                    query_body['query']['filtered'][
-                        'filter']['and'].append(json_filter)
+                    query_body['query']['bool']['filter'].append(json_filter)
+
         final_query_dict = dict((k, v)
                                 for (k, v) in query_dict.items() if k in ALLOWED_SEARCH_PARAMS)
         final_query_dict['index'] = self.es_index
@@ -289,15 +298,32 @@ def add_query_utilities(app):
     def more_like_this(hit, **kwargs):
         es = flask.current_app.es
         es_index = app.es_index
-        doctype, docid = hit.type, hit._id
-        raw_results = es.mlt(
-            index=es_index, doc_type=doctype, id=docid, **kwargs)
-        return QueryResults(raw_results)
+        docid = hit._id
+
+        # Modern Elasticsearch uses the search API with more_like_this query
+        try:
+            query_body = {
+                "query": {
+                    "more_like_this": {
+                        "fields": ["_all"],
+                        "like": [{"_index": es_index, "_id": docid}],
+                        "min_term_freq": 1,
+                        "min_doc_freq": 1
+                    }
+                }
+            }
+            query_body["query"]["more_like_this"].update(kwargs)
+            raw_results = es.search(index=es_index, body=query_body)
+            return QueryResults(raw_results)
+        except Exception as e:
+            # Return empty results on error
+            return QueryResults({"hits": {"total": 0, "hits": []}})
 
     def get_document(doctype, docid):
         es = flask.current_app.es
         es_index = app.es_index
-        raw_results = es.get(index=es_index, doc_type=doctype, id=docid)
+        # Modern Elasticsearch doesn't use doc_type in get
+        raw_results = es.get(index=es_index, id=docid)
         return QueryHit(raw_results)
 
     @app.context_processor

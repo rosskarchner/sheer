@@ -5,7 +5,7 @@ import functools
 import codecs
 import markdown
 import datetime
-from urlparse import urlparse
+from urllib.parse import urlparse
 
 import flask
 import elasticsearch
@@ -90,15 +90,15 @@ def app_with_config(config):
     blueprints_path = os.path.join(root_dir, '_settings/blueprints.json')
     if os.path.exists(blueprints_path):
         blueprints = read_json_file(blueprints_path)
-        for key, value in blueprints.iteritems():
+        for key, value in blueprints.items():
             package = value['package']
             module = value['module']
 
-            # Using a less elegant way of doing dynamic imports to support 2.6
+            # Dynamic imports
             try:
                 blueprint = __import__(package, fromlist=[module])
             except ImportError:
-                print "Error importing package {0}".format(key)
+                print("Error importing package {0}".format(key))
                 continue
             app.register_blueprint(getattr(blueprint, module))
 
